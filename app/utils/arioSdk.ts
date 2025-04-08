@@ -13,7 +13,7 @@ export function getARIOInstance() {
     const sdk = ARIO.init();
     
     // Set debug mode if available in window config
-    if (typeof window !== 'undefined' && window.arioConfig && window.arioConfig.debug) {
+    if (typeof window !== 'undefined' && window.arioConfig && window.arioConfig.debugMode) {
       console.log('Setting debug mode from window config');
     }
     

@@ -9,8 +9,6 @@ import ProfilePage from './components/ProfilePage';
 import ProtectedRoute from './components/ProtectedRoute';
 import { Providers } from './providers';
 import { AuthProvider } from './context/AuthContext';
-// Import polyfills
-import './utils/polyfills';
 
 export default function Home() {
   // Use state to handle initial client-side rendering
