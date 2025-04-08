@@ -1,17 +1,22 @@
 import { NextResponse } from 'next/server';
-import { randomBytes } from 'crypto';
+import { ArweaveSigner, TurboFactory } from '@ardrive/turbo-sdk';
+import fs from 'fs';
+import path from 'path';
 
 // Configure the route for static export
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// Generate a random transaction ID in the format of Arweave txids
-function generateTxId() {
-  return randomBytes(32).toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '')
-    .substring(0, 43);
+
+export const getTurboClient = async () => {
+  const jwk = JSON.parse(process.env.TURBO_PRIVATE_KEY || '');
+  if (!jwk) {
+    throw new Error('TURBO_PRIVATE_KEY is not set');
+  }
+  const signer = new ArweaveSigner(jwk);
+  return TurboFactory.authenticated({
+    signer,
+  });
 }
 
 export async function POST(request: Request) {
@@ -39,31 +44,39 @@ export async function POST(request: Request) {
     // Simulate processing and uploading each file
     console.log(`Processing ${files.length} files for upload to Arweave...`);
     
-    // In a real implementation, you would:
-    // 1. Import the Turbo SDK
-    // 2. Initialize it with the wallet
-    // 3. Upload each file
-    // 4. Create a manifest
-    // 5. Return the manifest transaction ID
-    
-    // For now, we'll simulate this with a delay and random IDs
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Generate a random transaction ID
-    const txId = generateTxId();
-    const url = `https://arweave.net/${txId}`;
-    
+    const turbo = await getTurboClient();
+    const tmpDirId = `tmp/${Date.now()}`;
+    const tmpDir = path.join(process.cwd(), tmpDirId);
+
+    // create a tmp directory with all the files
+    if (!fs.existsSync(tmpDir)) {
+      fs.mkdirSync(tmpDir, { recursive: true });
+    }
+
+    // write all the files to the tmp directory
+    for (const file of files) {
+      const formFile = file as File;
+      const filePath = path.join(tmpDir, formFile.name);
+      const fileBuffer = Buffer.from(await formFile.arrayBuffer());
+      fs.writeFileSync(filePath, fileBuffer);
+    }
+
+    // upload all the files to arweave and create a manifest
+    const uploadFolder = await turbo.uploadFolder({
+      folderPath: tmpDir,
+      manifestOptions: {
+        disableManifest: false,
+        // any other manifest options
+      }
+    });
+
     // Return success response
     return NextResponse.json({
       success: true,
       message: 'Files uploaded successfully to Arweave',
-      txId,
-      url,
-      files: files.map((file: any) => ({
-        name: file.name,
-        size: file.size,
-        type: file.type
-      }))
+      txId: uploadFolder.manifestResponse?.id,
+      url: `https://arweave.net/${uploadFolder.manifestResponse?.id}` ,
+      files: files.length,
     });
   } catch (error) {
     console.error('Error uploading files:', error);
