@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
+    "target": "ESNext",
     "lib": [
       "dom",
       "dom.iterable",
@@ -25,6 +25,10 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      // TODO: @dha-team/arbundles uses "$/utils" alias internally, but does not resolve correctly when consumed, add this alias to avoid build errors until the package is updated
+      "$/utils": [
+        "./node_modules/@dha-team/arbundles/build/web/esm/src/webUtils.js"
       ]
     }
   },

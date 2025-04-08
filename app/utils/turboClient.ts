@@ -1,14 +1,7 @@
 'use client';
 
 import mime from 'mime-types';
-import Arweave from 'arweave';
-
-// Initialize Arweave client
-const arweave = Arweave.init({
-  host: 'arweave.net',
-  port: 443,
-  protocol: 'https'
-});
+import { ArconnectSigner, TurboFactory } from '@ardrive/turbo-sdk/web';
 
 /**
  * Get the content type of a file
@@ -106,6 +99,9 @@ export async function uploadToArweave(
     // Get wallet address for logging
     const walletAddress = await window.arweaveWallet.getActiveAddress();
     console.log('Wallet address:', walletAddress);
+
+    const signer = new ArconnectSigner(window.arweaveWallet);
+    const turbo = TurboFactory.authenticated({ signer });
     
     // Prepare data
     if (onProgress) onProgress(20);
@@ -114,44 +110,34 @@ export async function uploadToArweave(
     
     // Create transaction
     if (onProgress) onProgress(30);
-    console.log('Creating transaction...');
-    const transaction = await arweave.createTransaction({
-      data: data
-    });
-    
-    // Add tags
-    transaction.addTag('Content-Type', getContentType(file));
-    transaction.addTag('App-Name', 'Arweave-Upload-Demo');
-    transaction.addTag('App-Version', '1.0.0');
-    transaction.addTag('Unix-Time', String(Date.now()));
-    transaction.addTag('Filename', file.name);
-    
-    if (onProgress) onProgress(40);
-    
-    // Sign transaction with ArConnect
-    console.log('Signing transaction...');
-    await arweave.transactions.sign(transaction);
-    
-    if (onProgress) onProgress(60);
+    console.log('Creating transaction...'); 
     
     // Submit transaction
     console.log('Posting transaction to Arweave network...');
-    const response = await arweave.transactions.post(transaction);
-    
-    if (response.status !== 200 && response.status !== 202) {
-      throw new Error(`Failed to post transaction: ${response.statusText}`);
-    }
+    const response = await turbo.uploadFile({ 
+      fileStreamFactory: () => Buffer.from(data),
+      fileSizeFactory: () => data.byteLength,
+      dataItemOpts: {
+        tags: [
+          { name: 'Content-Type', value: getContentType(file) },
+          { name: 'App-Name', value: 'Arweave-Upload-Demo' },
+          { name: 'App-Version', value: '1.0.0' },
+          { name: 'Unix-Time', value: String(Date.now()) },
+          { name: 'Filename', value: file.name }
+        ]
+      }
+    })
     
     if (onProgress) onProgress(100);
-    console.log('Transaction posted successfully:', transaction.id);
+    console.log('Transaction posted successfully:', response.id);
     
     return {
-      id: transaction.id,
-      url: `https://arweave.net/${transaction.id}`
+      id: response.id,
+      url: `https://arweave.net/${response.id}`
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Upload error:', error);
-    throw new Error(`Upload error: ${error.message || String(error)}`);
+    throw new Error(`Upload error: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -170,8 +156,8 @@ export async function uploadFolderToArweave(
     // For simplicity, we'll just upload the first file
     console.log(`Uploading first file from folder: ${files[0].name}`);
     return await uploadToArweave(files[0], onProgress);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Folder upload error:', error);
-    throw new Error(`Folder upload error: ${error.message || String(error)}`);
+    throw new Error(`Folder upload error: ${error instanceof Error ? error.message : String(error)}`);
   }
 } 

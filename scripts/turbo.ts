@@ -1,4 +1,4 @@
-import { TurboFactory } from '@ardrive/turbo-sdk';
+import { TurboFactory } from '@ardrive/turbo-sdk/web';
 import fs from 'fs';
 import mime from 'mime-types';
 import path from 'path';
@@ -25,7 +25,7 @@ export default async function TurboDeploy(jwk: JWKInterface): Promise<string> {
   const deployFolder = './out';
   
   // Create a manifest for Arweave paths
-  let manifest = {
+  const manifest = {
     manifest: 'arweave/paths',
     version: '0.2.0',
     index: { path: '' },
@@ -39,6 +39,8 @@ export default async function TurboDeploy(jwk: JWKInterface): Promise<string> {
   async function processFiles(dir: string): Promise<void> {
     const files = fs.readdirSync(dir);
     
+
+    // TODO: this could be replaced with uploadFolder and createManifest set to true
     for (const file of files) {
       const filePath = path.join(dir, file);
       const relativePath = path.relative(deployFolder, filePath)

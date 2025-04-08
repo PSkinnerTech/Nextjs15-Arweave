@@ -18,6 +18,16 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+To build the project, run:
+
+```bash
+pnpm build
+# or
+npm run build --no-lint
+# or
+yarn build --no-lint
+```
+
 ## Client-Side Arweave Upload Implementation
 
 This project features a fully client-side implementation for uploading files to the Arweave network directly from the browser without requiring a server component. Here's how it works:
@@ -133,6 +143,10 @@ export async function uploadToArweave(
     // Get wallet address for logging
     const walletAddress = await window.arweaveWallet.getActiveAddress();
     console.log('Wallet address:', walletAddress);
+
+    // Initialize Turbo SDK with ArConnect signer
+    const signer = new ArconnectSigner(window.arweaveWallet);
+    const turbo = TurboFactory.authenticated({ signer });
     
     // Prepare data
     if (onProgress) onProgress(20);
@@ -141,44 +155,34 @@ export async function uploadToArweave(
     
     // Create transaction
     if (onProgress) onProgress(30);
-    console.log('Creating transaction...');
-    const transaction = await arweave.createTransaction({
-      data: data
-    });
-    
-    // Add tags
-    transaction.addTag('Content-Type', getContentType(file));
-    transaction.addTag('App-Name', 'Arweave-Upload-Demo');
-    transaction.addTag('App-Version', '1.0.0');
-    transaction.addTag('Unix-Time', String(Date.now()));
-    transaction.addTag('Filename', file.name);
-    
-    if (onProgress) onProgress(40);
-    
-    // Sign transaction with ArConnect
-    console.log('Signing transaction...');
-    await arweave.transactions.sign(transaction);
-    
-    if (onProgress) onProgress(60);
+    console.log('Creating transaction...'); 
     
     // Submit transaction
     console.log('Posting transaction to Arweave network...');
-    const response = await arweave.transactions.post(transaction);
-    
-    if (response.status !== 200 && response.status !== 202) {
-      throw new Error(`Failed to post transaction: ${response.statusText}`);
-    }
+    const response = await turbo.uploadFile({ 
+      fileStreamFactory: () => Buffer.from(data),
+      fileSizeFactory: () => data.byteLength,
+      dataItemOpts: {
+        tags: [
+          { name: 'Content-Type', value: getContentType(file) },
+          { name: 'App-Name', value: 'Arweave-Upload-Demo' },
+          { name: 'App-Version', value: '1.0.0' },
+          { name: 'Unix-Time', value: String(Date.now()) },
+          { name: 'Filename', value: file.name }
+        ]
+      }
+    })
     
     if (onProgress) onProgress(100);
-    console.log('Transaction posted successfully:', transaction.id);
+    console.log('Transaction posted successfully:', response.id);
     
     return {
-      id: transaction.id,
-      url: `https://arweave.net/${transaction.id}`
+      id: response.id,
+      url: `https://arweave.net/${response.id}`
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Upload error:', error);
-    throw new Error(`Upload error: ${error.message || String(error)}`);
+    throw new Error(`Upload error: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 ```
@@ -282,9 +286,6 @@ The `turboClient.ts` utility provides several key functions:
 - `uploadToArweave()` - Handles file upload with progress tracking
 - `uploadFolderToArweave()` - Handles multiple file uploads
 
-## Why arweave-js Instead of Turbo SDK
-
-This project originally attempted to use ArDrive's Turbo SDK, but switched to arweave-js for client-side implementations due to Node.js dependencies in the Turbo SDK that don't work in browsers. The arweave-js library is designed to work in both Node.js and browser environments.
 
 ## Learn More
 
