@@ -87,7 +87,16 @@ The `next.config.ts` file includes webpack overrides to handle Node.js dependenc
 
 ```javascript
 // next.config.ts
+import webpack from 'webpack';
+
 const nextConfig = {
+  // Ensure static export for compatibility
+  output: 'export',
+  
+  // Disable React strict mode to avoid issues with certain dependencies
+  reactStrictMode: false,
+  
+  // Configure webpack for Turbo SDK compatibility
   webpack: (config) => {
     config.resolve.alias = {
       ...config.resolve.alias,
@@ -101,6 +110,7 @@ const nextConfig = {
       ...config.resolve.fallback,
       fs: false,
       path: false,
+      os: false,
       crypto: require.resolve('crypto-browserify'),
       stream: require.resolve('stream-browserify'),
       buffer: require.resolve('buffer/'),
@@ -117,6 +127,8 @@ const nextConfig = {
     return config;
   }
 };
+
+export default nextConfig;
 ```
 
 #### 2. Dependencies
@@ -125,10 +137,24 @@ To make the Turbo SDK work client-side, the project uses:
 
 ```json
 "dependencies": {
-  "@ardrive/turbo-sdk": "^1.0.0-alpha.5", // Latest alpha with browser support
-  "bitcoinjs-lib": "^6.1.5",
+  "@ar.io/sdk": "^3.9.1",
+  "@ardrive/turbo-sdk": "^1.23.4-alpha.1",
+  "@arweave-wallet-kit/browser-wallet-strategy": "^0.1.1",
+  "@arweave-wallet-kit/core": "^0.1.1",
+  "@arweave-wallet-kit/react": "^0.3.0",
+  "arweave-wallet-connector": "^1.0.2",
+  "bitcoinjs-lib": "^6.1.7",
+  "react-hot-toast": "^2.5.2",
+  "util": "^0.12.5"
+},
+"devDependencies": {
+  "arweave": "^1.15.7",
+  "browserify-fs": "^1.0.0",
   "buffer": "^6.0.3",
-  "crypto-browserify": "^3.12.0",
+  "crypto-browserify": "^3.12.1",
+  "mime-types": "^3.0.1",
+  "node-polyfill-webpack-plugin": "^4.1.0",
+  "path-browserify": "^1.0.1",
   "process": "^0.11.10",
   "stream-browserify": "^3.0.0"
 }
@@ -143,6 +169,7 @@ To make the Turbo SDK work client-side, the project uses:
 - `app/utils/turboClient.ts` - Utility functions for Arweave uploads with Turbo SDK
 - `app/context/AuthContext.tsx` - Handles wallet connection state
 - `app/utils/arweaveWallet.ts` - Wallet utilities
+- `next.config.ts` - Webpack configuration for Turbo SDK browser compatibility
 
 #### Upload Process Files
 
@@ -210,8 +237,8 @@ export async function uploadToArweave(
     if (onProgress) onProgress(30);
     console.log('Creating transaction...'); 
     
-    // Submit transaction
-    console.log('Posting transaction to Arweave network...');
+    // Submit transaction via Turbo SDK
+    console.log('Posting transaction to Arweave network via Turbo...');
     const response = await turbo.uploadFile({ 
       fileStreamFactory: () => Buffer.from(data),
       fileSizeFactory: () => data.byteLength,
@@ -224,7 +251,7 @@ export async function uploadToArweave(
           { name: 'Filename', value: file.name }
         ]
       }
-    })
+    });
     
     if (onProgress) onProgress(100);
     console.log('Transaction posted successfully:', response.id);
@@ -247,13 +274,15 @@ export async function uploadToArweave(
 3. **Better privacy** - Files go directly from user to Arweave via Turbo
 4. **Simplified architecture** - No need for API routes or server-side code
 5. **Better user experience** - Real-time progress updates and feedback
+6. **Static exports** - Compatible with Next.js static exports, making deployment simpler
 
 ### Technical Considerations
 
 - **Wallet extension required** - Users must have ArConnect installed
 - **Browser compatibility** - Special webpack configuration required
-- **Alpha status** - Using the latest alpha build of Turbo SDK for browser support
-- **Polyfills** - Node.js core modules are polyfilled in the browser
+- **Alpha build** - Using latest alpha build (1.23.4-alpha.1) with improved browser support
+- **React 19 compatible** - Works with the latest Next.js 15.x and React 19
+- **Static export** - Works with Next.js static export mode (`output: 'export'`)
 
 ## Components Overview
 
