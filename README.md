@@ -1,4 +1,6 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Next.js Arweave Upload Demo
+
+This project demonstrates how to upload files to the Arweave permaweb directly from a browser using Next.js 15, ArConnect wallet, and arweave-js.
 
 ## Getting Started
 
@@ -16,21 +18,317 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Client-Side Arweave Upload Implementation
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+This project features a fully client-side implementation for uploading files to the Arweave network directly from the browser without requiring a server component. Here's how it works:
+
+### Upload Flow
+
+1. **User connects wallet** - ArConnect browser extension is used for wallet connection
+2. **User selects file(s)** - Via drag & drop or file picker
+3. **Upload is initiated** - Client-side code handles the entire upload process
+4. **Transaction is created** - Using arweave-js to create an Arweave transaction
+5. **Transaction is signed** - Using the connected wallet via ArConnect
+6. **Transaction is posted** - Directly to the Arweave network
+7. **URL is generated** - For permanent access to the uploaded file
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Browser   │     │  ArConnect  │     │  arweave-js │     │   Arweave   │
+│    Client   │     │    Wallet   │     │  Library    │     │   Network   │
+└──────┬──────┘     └──────┬──────┘     └──────┬──────┘     └──────┬──────┘
+       │                   │                   │                   │
+       │ Connect Wallet    │                   │                   │
+       │───────────────────>                   │                   │
+       │                   │ Authorize         │                   │
+       │                   │<──────────────────│                   │
+       │ Grant Permission  │                   │                   │
+       │<───────────────────                   │                   │
+       │                   │                   │                   │
+       │ Select File       │                   │                   │
+       │────┐              │                   │                   │
+       │    │              │                   │                   │
+       │<───┘              │                   │                   │
+       │                   │                   │                   │
+       │ Upload File       │                   │                   │
+       │────────────────────────────────────────>                  │
+       │                   │                   │ Create Transaction│
+       │                   │                   │────┐              │
+       │                   │                   │    │              │
+       │                   │                   │<───┘              │
+       │                   │                   │                   │
+       │                   │ Request Signature │                   │
+       │                   │<──────────────────│                   │
+       │ Confirm Signature │                   │                   │
+       │<───────────────────                   │                   │
+       │ Approve           │                   │                   │
+       │───────────────────>                   │                   │
+       │                   │ Return Signature  │                   │
+       │                   │──────────────────>│                   │
+       │                   │                   │ Post Transaction  │
+       │                   │                   │──────────────────>│
+       │                   │                   │                   │
+       │                   │                   │ Transaction ID    │
+       │                   │                   │<──────────────────│
+       │ Upload Complete   │                   │                   │
+       │<─────────────────────────────────────────────────────────│
+       │                   │                   │                   │
+```
+
+### Files Involved
+
+#### Core Application Files
+
+- `app/page.tsx` - Main entry point with routing setup
+- `app/components/DashboardPage.tsx` - Main upload interface 
+- `app/utils/turboClient.ts` - Utility functions for Arweave uploads
+- `app/context/AuthContext.tsx` - Handles wallet connection state
+- `app/utils/arweaveWallet.ts` - Wallet utilities
+
+#### Upload Process Files
+
+| File | Purpose |
+|------|---------|
+| **DashboardPage.tsx** | Provides the UI for file uploading; handles drag & drop, file selection, and displays upload progress |
+| **turboClient.ts** | Contains core upload functions: `uploadToArweave()` and `uploadFolderToArweave()` |
+| **AuthContext.tsx** | Manages wallet connection state using ArConnect |
+
+### The Upload Implementation
+
+The client-side upload process is implemented as follows:
+
+#### 1. Setting up arweave-js
+
+```typescript
+// app/utils/turboClient.ts
+import Arweave from 'arweave';
+
+// Initialize Arweave client
+const arweave = Arweave.init({
+  host: 'arweave.net',
+  port: 443,
+  protocol: 'https'
+});
+```
+
+#### 2. File Upload Function
+
+```typescript
+// app/utils/turboClient.ts
+export async function uploadToArweave(
+  file: File,
+  onProgress?: (percent: number) => void
+): Promise<{ id: string; url: string }> {
+  // Check if ArConnect is installed
+  if (!window.arweaveWallet) {
+    throw new Error('ArConnect wallet not found. Please install the ArConnect browser extension.');
+  }
+  
+  try {
+    // Request wallet permissions
+    if (onProgress) onProgress(5);
+    await window.arweaveWallet.connect(['ACCESS_PUBLIC_KEY', 'SIGNATURE', 'SIGN_TRANSACTION']);
+    if (onProgress) onProgress(10);
+    
+    // Get wallet address for logging
+    const walletAddress = await window.arweaveWallet.getActiveAddress();
+    console.log('Wallet address:', walletAddress);
+    
+    // Prepare data
+    if (onProgress) onProgress(20);
+    console.log('Reading file data...');
+    const data = await file.arrayBuffer();
+    
+    // Create transaction
+    if (onProgress) onProgress(30);
+    console.log('Creating transaction...');
+    const transaction = await arweave.createTransaction({
+      data: data
+    });
+    
+    // Add tags
+    transaction.addTag('Content-Type', getContentType(file));
+    transaction.addTag('App-Name', 'Arweave-Upload-Demo');
+    transaction.addTag('App-Version', '1.0.0');
+    transaction.addTag('Unix-Time', String(Date.now()));
+    transaction.addTag('Filename', file.name);
+    
+    if (onProgress) onProgress(40);
+    
+    // Sign transaction with ArConnect
+    console.log('Signing transaction...');
+    await arweave.transactions.sign(transaction);
+    
+    if (onProgress) onProgress(60);
+    
+    // Submit transaction
+    console.log('Posting transaction to Arweave network...');
+    const response = await arweave.transactions.post(transaction);
+    
+    if (response.status !== 200 && response.status !== 202) {
+      throw new Error(`Failed to post transaction: ${response.statusText}`);
+    }
+    
+    if (onProgress) onProgress(100);
+    console.log('Transaction posted successfully:', transaction.id);
+    
+    return {
+      id: transaction.id,
+      url: `https://arweave.net/${transaction.id}`
+    };
+  } catch (error: any) {
+    console.error('Upload error:', error);
+    throw new Error(`Upload error: ${error.message || String(error)}`);
+  }
+}
+```
+
+#### 3. UI Implementation in DashboardPage.tsx
+
+```typescript
+// app/components/DashboardPage.tsx
+const handleUpload = async () => {
+  if (files.length === 0) {
+    addTerminalMessage('No files selected for upload.', 'error');
+    return;
+  }
+  
+  if (walletStatus !== 'connected') {
+    addTerminalMessage('Wallet not connected. Please connect your wallet to upload files.', 'error');
+    return;
+  }
+  
+  setUploadStatus('uploading');
+  setTerminalMessages([]); // Clear previous messages
+  addTerminalMessage('$ arweave deploy', 'command');
+  addTerminalMessage('Preparing for Arweave upload...', 'info');
+  addTerminalMessage('Using ArConnect for direct transaction signing', 'info');
+  
+  try {
+    // Calculate total size for info
+    const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+    addTerminalMessage(`Total upload size: ${formatBytes(totalSize)}`, 'info');
+    
+    // Single file upload
+    const file = files[0];
+    addTerminalMessage(`Preparing file: ${file.name} (${formatBytes(file.size)})`, 'info');
+    
+    // Determine content type
+    const contentType = getContentType(file);
+    addTerminalMessage(`Content-Type detected: ${contentType}`, 'info');
+    addTerminalMessage('Requesting ArConnect wallet permissions...', 'info');
+    
+    setUploadingFile(file.name);
+    setProgressPercent(10);
+    
+    // Upload file directly from browser
+    const result = await uploadToArweave(file, (percent) => {
+      setProgressPercent(percent);
+    });
+    
+    setUploadingFile(null);
+    setProgressPercent(100);
+    
+    addTerminalMessage(`File uploaded successfully with TX ID: ${result.id}`, 'success');
+    addTerminalMessage(`View your file at: ${result.url}`, 'success');
+    
+    setDeploymentUrl(result.url);
+    setUploadStatus('success');
+  } catch (error) {
+    console.error('Upload error:', error);
+    setUploadingFile(null);
+    setProgressPercent(0);
+    
+    addTerminalMessage(`Error: ${error instanceof Error ? error.message : 'Unknown error during upload'}`, 'error');
+    addTerminalMessage('Upload failed. Please try again or check your wallet connection.', 'error');
+    setUploadStatus('error');
+  }
+};
+```
+
+### Key Benefits of Client-Side Implementation
+
+1. **No server required** - All uploads happen directly from the user's browser
+2. **Lower infrastructure costs** - No need for server bandwidth or storage
+3. **Better privacy** - Files go directly from user to Arweave
+4. **Simplified architecture** - No need for API routes or server-side code
+5. **Better user experience** - Real-time progress updates and feedback
+
+### Technical Considerations
+
+- **Wallet extension required** - Users must have ArConnect installed
+- **AR tokens needed** - Users must have AR tokens to pay for storage
+- **File size limitations** - Browser memory limits may apply to very large files
+- **Progress tracking** - The implementation includes progress updates during upload
+
+## Components Overview
+
+### DashboardPage Component
+
+The Dashboard page provides a complete UI for uploading files including:
+
+- File drag & drop interface
+- File selection via file picker
+- Upload progress tracking with percentage
+- Terminal-like interface for command feedback
+- Deployment URL display after successful uploads
+
+### TurboClient Utilities
+
+The `turboClient.ts` utility provides several key functions:
+
+- `getContentType()` - Determines the correct MIME type for files
+- `formatBytes()` - Formats file sizes in human-readable form
+- `uploadToArweave()` - Handles file upload with progress tracking
+- `uploadFolderToArweave()` - Handles multiple file uploads
+
+## Why arweave-js Instead of Turbo SDK
+
+This project originally attempted to use ArDrive's Turbo SDK, but switched to arweave-js for client-side implementations due to Node.js dependencies in the Turbo SDK that don't work in browsers. The arweave-js library is designed to work in both Node.js and browser environments.
 
 ## Learn More
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- [Arweave Documentation](https://docs.arweave.org/)
+- [ArConnect Documentation](https://docs.arconnect.io/)
+- [arweave-js Documentation](https://github.com/ArweaveTeam/arweave-js)
+- [Next.js Documentation](https://nextjs.org/docs)
 
 ## Deploy on Vercel
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Deploy on Arweave
+
+This project includes scripts to deploy your Next.js app to the Arweave permaweb, providing permanent and decentralized hosting.
+
+### Prerequisites
+
+1. An Arweave wallet file (JWK format)
+2. Arweave tokens for transaction fees
+3. Next.js app configured for static export
+
+### Deployment Steps
+
+1. Copy your Arweave wallet file to the project root as `wallet.json`:
+   ```bash
+   cp your-wallet.json wallet.json
+   ```
+
+2. Run the deployment script:
+   ```bash
+   pnpm deploy
+   ```
+
+3. Once completed, your app will be permanently available on Arweave at the URL provided in the console output.
+
+### How it Works
+
+The deployment process:
+1. Builds your Next.js app as a static site
+2. Uploads all files to Arweave using the Turbo service
+3. Creates an Arweave manifest to preserve the directory structure
+4. Returns a transaction ID that serves as the root of your deployed app
+
+Your app will be available at `https://arweave.net/[TRANSACTION_ID]`
