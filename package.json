@@ -10,8 +10,8 @@
     "deploy": "next build && tsx scripts/deploy.ts"
   },
   "dependencies": {
-    "@ardrive/turbo-sdk": "^1.23.2",
     "@ar.io/sdk": "^3.9.1",
+    "@ardrive/turbo-sdk": "^1.23.4-alpha.1",
     "@arweave-wallet-kit/browser-wallet-strategy": "^0.1.1",
     "@arweave-wallet-kit/core": "^0.1.1",
     "@arweave-wallet-kit/othent-strategy": "^0.1.1",
@@ -20,6 +20,7 @@
     "@arweave-wallet-kit/wander-strategy": "^0.1.2",
     "@arweave-wallet-kit/webwallet-strategy": "0.0.1-beta.4",
     "arweave-wallet-connector": "^1.0.2",
+    "bitcoinjs-lib": "^6.1.7",
     "next": "15.2.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
