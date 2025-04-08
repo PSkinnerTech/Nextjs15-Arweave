@@ -37,10 +37,10 @@
     winston "^3.13.0"
     zod "^3.23.8"
 
-"@ardrive/turbo-sdk@^1.23.4-alpha.1":
-  version "1.23.4-alpha.1"
-  resolved "https://registry.yarnpkg.com/@ardrive/turbo-sdk/-/turbo-sdk-1.23.4-alpha.1.tgz#7f777757c85b49898d416e87b8fe48a3d2e207fc"
-  integrity sha512-q1lfzf3LY7v82NUzy2slWh4ci+YBAGVpGCrf1QKl7wF6zJAQIJr87mKjCSUv39EqCd3oj6+zVM3unOe07uLIcQ==
+"@ardrive/turbo-sdk@^1.23.4-alpha.2":
+  version "1.23.4-alpha.2"
+  resolved "https://registry.yarnpkg.com/@ardrive/turbo-sdk/-/turbo-sdk-1.23.4-alpha.2.tgz#513bc6a9fdbc909d74fbe8ce9132e12d66d2d53a"
+  integrity sha512-zy6GWOG8A8/WoXDMb/pToUWXgl07p+Ns1/08yBn53vVmtT+Si6ajQy0ovuiVyqwzWmtoGzkEImR8EZwz9qneXA==
   dependencies:
     "@cosmjs/amino" "^0.32.4"
     "@cosmjs/crypto" "^0.32.4"
@@ -54,6 +54,7 @@
     axios "1.4.0"
     axios-retry "^3.7.0"
     bignumber.js "^9.1.2"
+    bitcoinjs-lib "^6.1.7"
     bs58 "^5.0.0"
     commander "^12.1.0"
     ethers "^6.12.0"
