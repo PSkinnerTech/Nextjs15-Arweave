@@ -1,6 +1,6 @@
 # Next.js Arweave Upload Demo
 
-This project demonstrates how to upload files to the Arweave permaweb directly from a browser using Next.js 15, ArConnect wallet, and arweave-js.
+This project demonstrates how to upload files to the Arweave permaweb directly from a browser using Next.js 15, ArConnect wallet, and Turbo SDK.
 
 ## Getting Started
 
@@ -28,24 +28,24 @@ npm run build --no-lint
 yarn build --no-lint
 ```
 
-## Client-Side Arweave Upload Implementation
+## Client-Side Turbo SDK Implementation
 
-This project features a fully client-side implementation for uploading files to the Arweave network directly from the browser without requiring a server component. Here's how it works:
+This project features a fully client-side implementation for uploading files to the Arweave network directly from the browser using ArDrive's Turbo SDK. The key innovation here is making the Turbo SDK work in a browser environment through specific Next.js configurations.
 
 ### Upload Flow
 
 1. **User connects wallet** - ArConnect browser extension is used for wallet connection
 2. **User selects file(s)** - Via drag & drop or file picker
 3. **Upload is initiated** - Client-side code handles the entire upload process
-4. **Transaction is created** - Using arweave-js to create an Arweave transaction
-5. **Transaction is signed** - Using the connected wallet via ArConnect
-6. **Transaction is posted** - Directly to the Arweave network
+4. **ArConnect signer is created** - Using the connected wallet
+5. **Turbo SDK client is initialized** - With the ArConnect signer
+6. **File is uploaded** - Using Turbo SDK's uploadFile method
 7. **URL is generated** - For permanent access to the uploaded file
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Browser   │     │  ArConnect  │     │  arweave-js │     │   Arweave   │
-│    Client   │     │    Wallet   │     │  Library    │     │   Network   │
+│   Browser   │     │  ArConnect  │     │  Turbo SDK  │     │   Arweave   │
+│    Client   │     │    Wallet   │     │             │     │   Network   │
 └──────┬──────┘     └──────┬──────┘     └──────┬──────┘     └──────┬──────┘
        │                   │                   │                   │
        │ Connect Wallet    │                   │                   │
@@ -60,22 +60,14 @@ This project features a fully client-side implementation for uploading files to 
        │    │              │                   │                   │
        │<───┘              │                   │                   │
        │                   │                   │                   │
-       │ Upload File       │                   │                   │
+       │ Create ArConnect Signer               │                   │
        │────────────────────────────────────────>                  │
-       │                   │                   │ Create Transaction│
+       │                   │                   │ Initialize Turbo  │
        │                   │                   │────┐              │
        │                   │                   │    │              │
        │                   │                   │<───┘              │
        │                   │                   │                   │
-       │                   │ Request Signature │                   │
-       │                   │<──────────────────│                   │
-       │ Confirm Signature │                   │                   │
-       │<───────────────────                   │                   │
-       │ Approve           │                   │                   │
-       │───────────────────>                   │                   │
-       │                   │ Return Signature  │                   │
-       │                   │──────────────────>│                   │
-       │                   │                   │ Post Transaction  │
+       │                   │                   │ Upload File       │
        │                   │                   │──────────────────>│
        │                   │                   │                   │
        │                   │                   │ Transaction ID    │
@@ -85,13 +77,70 @@ This project features a fully client-side implementation for uploading files to 
        │                   │                   │                   │
 ```
 
+### Making Turbo SDK Work in the Browser
+
+Getting the Turbo SDK to work in a client-side Next.js app required specific configurations:
+
+#### 1. Next.js Configuration
+
+The `next.config.ts` file includes webpack overrides to handle Node.js dependencies that Turbo SDK depends on:
+
+```javascript
+// next.config.ts
+const nextConfig = {
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      // Replace problematic deps with browser versions
+      'bitcoinjs-lib': 'bitcoinjs-lib/dist/bitcoin.js',
+      'ecpair': 'ecpair/dist/ecpair.js',
+    };
+
+    // Add polyfills for Node.js built-ins
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      path: false,
+      crypto: require.resolve('crypto-browserify'),
+      stream: require.resolve('stream-browserify'),
+      buffer: require.resolve('buffer/'),
+    };
+
+    // Add plugins for browser polyfills
+    config.plugins.push(
+      new webpack.ProvidePlugin({
+        Buffer: ['buffer', 'Buffer'],
+        process: 'process/browser',
+      })
+    );
+
+    return config;
+  }
+};
+```
+
+#### 2. Dependencies
+
+To make the Turbo SDK work client-side, the project uses:
+
+```json
+"dependencies": {
+  "@ardrive/turbo-sdk": "^1.0.0-alpha.5", // Latest alpha with browser support
+  "bitcoinjs-lib": "^6.1.5",
+  "buffer": "^6.0.3",
+  "crypto-browserify": "^3.12.0",
+  "process": "^0.11.10",
+  "stream-browserify": "^3.0.0"
+}
+```
+
 ### Files Involved
 
 #### Core Application Files
 
 - `app/page.tsx` - Main entry point with routing setup
 - `app/components/DashboardPage.tsx` - Main upload interface 
-- `app/utils/turboClient.ts` - Utility functions for Arweave uploads
+- `app/utils/turboClient.ts` - Utility functions for Arweave uploads with Turbo SDK
 - `app/context/AuthContext.tsx` - Handles wallet connection state
 - `app/utils/arweaveWallet.ts` - Wallet utilities
 
@@ -99,26 +148,30 @@ This project features a fully client-side implementation for uploading files to 
 
 | File | Purpose |
 |------|---------|
+| **next.config.ts** | Configures webpack to support Turbo SDK in the browser |
 | **DashboardPage.tsx** | Provides the UI for file uploading; handles drag & drop, file selection, and displays upload progress |
-| **turboClient.ts** | Contains core upload functions: `uploadToArweave()` and `uploadFolderToArweave()` |
+| **turboClient.ts** | Contains core upload functions using Turbo SDK: `uploadToArweave()` and `uploadFolderToArweave()` |
 | **AuthContext.tsx** | Manages wallet connection state using ArConnect |
 
-### The Upload Implementation
+### The Turbo SDK Implementation
 
 The client-side upload process is implemented as follows:
 
-#### 1. Setting up arweave-js
+#### 1. Setting up Turbo SDK with ArConnect
 
 ```typescript
 // app/utils/turboClient.ts
-import Arweave from 'arweave';
+import { TurboFactory, ArconnectSigner } from "@ardrive/turbo-sdk";
 
-// Initialize Arweave client
-const arweave = Arweave.init({
-  host: 'arweave.net',
-  port: 443,
-  protocol: 'https'
-});
+// Request wallet permissions
+await window.arweaveWallet.connect(['ACCESS_PUBLIC_KEY', 'SIGNATURE', 'SIGN_TRANSACTION']);
+
+// Get wallet address for logging
+const walletAddress = await window.arweaveWallet.getActiveAddress();
+
+// Initialize Turbo SDK with ArConnect signer
+const signer = new ArconnectSigner(window.arweaveWallet);
+const turbo = TurboFactory.authenticated({ signer });
 ```
 
 #### 2. File Upload Function
@@ -187,83 +240,20 @@ export async function uploadToArweave(
 }
 ```
 
-#### 3. UI Implementation in DashboardPage.tsx
+### Key Benefits of Turbo SDK
 
-```typescript
-// app/components/DashboardPage.tsx
-const handleUpload = async () => {
-  if (files.length === 0) {
-    addTerminalMessage('No files selected for upload.', 'error');
-    return;
-  }
-  
-  if (walletStatus !== 'connected') {
-    addTerminalMessage('Wallet not connected. Please connect your wallet to upload files.', 'error');
-    return;
-  }
-  
-  setUploadStatus('uploading');
-  setTerminalMessages([]); // Clear previous messages
-  addTerminalMessage('$ arweave deploy', 'command');
-  addTerminalMessage('Preparing for Arweave upload...', 'info');
-  addTerminalMessage('Using ArConnect for direct transaction signing', 'info');
-  
-  try {
-    // Calculate total size for info
-    const totalSize = files.reduce((sum, file) => sum + file.size, 0);
-    addTerminalMessage(`Total upload size: ${formatBytes(totalSize)}`, 'info');
-    
-    // Single file upload
-    const file = files[0];
-    addTerminalMessage(`Preparing file: ${file.name} (${formatBytes(file.size)})`, 'info');
-    
-    // Determine content type
-    const contentType = getContentType(file);
-    addTerminalMessage(`Content-Type detected: ${contentType}`, 'info');
-    addTerminalMessage('Requesting ArConnect wallet permissions...', 'info');
-    
-    setUploadingFile(file.name);
-    setProgressPercent(10);
-    
-    // Upload file directly from browser
-    const result = await uploadToArweave(file, (percent) => {
-      setProgressPercent(percent);
-    });
-    
-    setUploadingFile(null);
-    setProgressPercent(100);
-    
-    addTerminalMessage(`File uploaded successfully with TX ID: ${result.id}`, 'success');
-    addTerminalMessage(`View your file at: ${result.url}`, 'success');
-    
-    setDeploymentUrl(result.url);
-    setUploadStatus('success');
-  } catch (error) {
-    console.error('Upload error:', error);
-    setUploadingFile(null);
-    setProgressPercent(0);
-    
-    addTerminalMessage(`Error: ${error instanceof Error ? error.message : 'Unknown error during upload'}`, 'error');
-    addTerminalMessage('Upload failed. Please try again or check your wallet connection.', 'error');
-    setUploadStatus('error');
-  }
-};
-```
-
-### Key Benefits of Client-Side Implementation
-
-1. **No server required** - All uploads happen directly from the user's browser
-2. **Lower infrastructure costs** - No need for server bandwidth or storage
-3. **Better privacy** - Files go directly from user to Arweave
+1. **Credit-based uploads** - Users don't need to own AR tokens directly
+2. **Lower cost** - Turbo provides cost-effective bundling of transactions
+3. **Better privacy** - Files go directly from user to Arweave via Turbo
 4. **Simplified architecture** - No need for API routes or server-side code
 5. **Better user experience** - Real-time progress updates and feedback
 
 ### Technical Considerations
 
 - **Wallet extension required** - Users must have ArConnect installed
-- **AR tokens needed** - Users must have AR tokens to pay for storage
-- **File size limitations** - Browser memory limits may apply to very large files
-- **Progress tracking** - The implementation includes progress updates during upload
+- **Browser compatibility** - Special webpack configuration required
+- **Alpha status** - Using the latest alpha build of Turbo SDK for browser support
+- **Polyfills** - Node.js core modules are polyfilled in the browser
 
 ## Components Overview
 
@@ -286,12 +276,11 @@ The `turboClient.ts` utility provides several key functions:
 - `uploadToArweave()` - Handles file upload with progress tracking
 - `uploadFolderToArweave()` - Handles multiple file uploads
 
-
 ## Learn More
 
 - [Arweave Documentation](https://docs.arweave.org/)
 - [ArConnect Documentation](https://docs.arconnect.io/)
-- [arweave-js Documentation](https://github.com/ArweaveTeam/arweave-js)
+- [Turbo SDK Documentation](https://github.com/ardriveapp/turbo-sdk)
 - [Next.js Documentation](https://nextjs.org/docs)
 
 ## Deploy on Vercel
